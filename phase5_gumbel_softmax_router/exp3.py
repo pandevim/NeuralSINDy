@@ -24,6 +24,10 @@ Architecture per derivative d
         dxdt_d += gate_j × coefficients_d[j] × mlp_out
 """
 
+import numpy as np
+import torch
+from huggingface_hub import hf_hub_download
+
 from .library  import load_library
 from .routers  import TopKRouter, build_complexity_prior
 from .training import TrainConfig, train_router

@@ -15,6 +15,10 @@ Key result: max activation ~44% (cos/identity confusion, no commitment).
 Leads to Exp 2 (state-independent routing).
 """
 
+import numpy as np
+import torch
+from huggingface_hub import hf_hub_download
+
 from .library  import load_library
 from .routers  import StateDepRouter
 from .training import TrainConfig, train_router

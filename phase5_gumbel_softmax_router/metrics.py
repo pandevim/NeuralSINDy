@@ -15,6 +15,11 @@ Scorecard keys
     final_tau           float — last logged temperature value
 """
 
+import numpy as np
+import torch
+import torch.nn.functional as F
+
+
 def compute_scorecard(router, history, X_val, dXdt_val, truth, exp_id=""):
     """
     Compute the standard scorecard for one router run.

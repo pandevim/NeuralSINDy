@@ -15,7 +15,14 @@ gets its own namespace and nothing gets clobbered:
     ...
 """
 
+import io
+
+import numpy as np
+import torch
+import matplotlib.pyplot as plt
+
 from .metrics import equation_string
+
 
 def print_summary(router, history, summary, truth):
     """Print routing results, discovered equations, and true equations."""

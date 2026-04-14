@@ -36,6 +36,11 @@ Phase-6 spec format (returned by spec_from_summary)
     }
 """
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
 # ── Gumbel-Softmax primitive ─────────────────────────────────────────────────
 
 def gumbel_softmax(logits, temperature=1.0, hard=True):

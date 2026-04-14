@@ -18,6 +18,14 @@ Set entropy_weight_max=0 to disable (e.g. for StateDepRouter / Exp 1, which
 used a different exploration-bonus scheme that is not reproduced here).
 """
 
+from dataclasses import dataclass
+
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+
 @dataclass
 class TrainConfig:
     epochs: int = 3000

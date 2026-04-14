@@ -23,6 +23,10 @@ derivative — the true v̇ = -k·x - c·v needs two terms.
 Leads to Exp 3 (top-k routing + complexity prior).
 """
 
+import numpy as np
+import torch
+from huggingface_hub import hf_hub_download
+
 from .library  import load_library
 from .routers  import StateIndepRouter
 from .training import TrainConfig, train_router
