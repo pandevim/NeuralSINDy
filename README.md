@@ -24,7 +24,7 @@
 
 Discovering governing equations from data is one of the most important problems in scientific machine learning. The **Sparse Identification of Nonlinear Dynamics (SINDy)** framework (Brunton et al., 2016) addresses this by fitting data to a hand-crafted library of candidate mathematical functions — polynomials, trigonometric functions, exponentials — and using sparse regression to select only the active terms.
 
-But what if we replaced those rigid mathematical functions with *neural networks that have learned to be those functions*?
+But what if we replaced those rigid mathematical functions with _neural networks that have learned to be those functions_?
 
 This experiment investigates a novel hybrid: using **small MLPs trained to "grok"** basic mathematical operations (cosine, sine, addition, multiplication) as the basis functions in a SINDy-style discovery framework. The hypothesis is that these neural approximations carry three unique advantages over their symbolic counterparts.
 
@@ -43,13 +43,16 @@ where **Θ(X) = [1, x, x², sin(x), cos(x), ...]** is a hand-designed feature ma
 This works remarkably well for textbook systems, but breaks down in practice for three reasons:
 
 ### 1. The Library Design Problem
-The user must guess which functions belong in the library *before* seeing the data. If the true dynamics involve `tanh(x)` but the library only includes polynomials and trig functions, SINDy will fail silently — producing a plausible-looking but incorrect equation. There is no systematic way to build the "right" library.
+
+The user must guess which functions belong in the library _before_ seeing the data. If the true dynamics involve `tanh(x)` but the library only includes polynomials and trig functions, SINDy will fail silently — producing a plausible-looking but incorrect equation. There is no systematic way to build the "right" library.
 
 ### 2. The Combinatorial Search Problem
+
 Searching over the space of possible equations is inherently discrete — you cannot do gradient descent on the choice between `sin(x)` and `cos(x)`. Standard SINDy sidesteps this with sparse regression, but this limits it to linear combinations of library terms. More complex compositions (e.g., `sin(cos(x))`) require exponentially large libraries.
 
 ### 3. The Noise Sensitivity Problem
-Real-world measurement data contains noise. Numerical differentiation amplifies this noise, and the rigid mathematical library offers no flexibility to adapt — `cos(x)` is `cos(x)`, regardless of whether the physical system produces a signal that is *almost* cosine but with systematic sensor-dependent distortions.
+
+Real-world measurement data contains noise. Numerical differentiation amplifies this noise, and the rigid mathematical library offers no flexibility to adapt — `cos(x)` is `cos(x)`, regardless of whether the physical system produces a signal that is _almost_ cosine but with systematic sensor-dependent distortions.
 
 ---
 
@@ -69,15 +72,19 @@ This would bridge the gap between the interpretability of SINDy and the flexibil
 ## Why It's Hard
 
 ### Grokking is Fragile
+
 "Grokking" — where a neural network suddenly generalizes long after memorizing the training data — requires careful hyperparameter tuning. The balance between learning rate, weight decay, dataset size, and training duration must be precise. If the MLP memorizes without grokking, it will fail to generalize and the SINDy library becomes useless.
 
 ### Neural Basis Functions are Redundant
-Unlike perfectly orthogonal mathematical functions (`sin` and `cos` are linearly independent), neural approximations of these functions will be *approximately* orthogonal at best. This near-collinearity in the library matrix **Θ** can confuse sparse regression, leading to incorrect term selection.
+
+Unlike perfectly orthogonal mathematical functions (`sin` and `cos` are linearly independent), neural approximations of these functions will be _approximately_ orthogonal at best. This near-collinearity in the library matrix **Θ** can confuse sparse regression, leading to incorrect term selection.
 
 ### Symbolic Extraction is Not Guaranteed
+
 Even if the neural pipeline discovers the correct dynamics, converting the opaque weight matrices back into symbolic equations is a separate, hard problem. Symbolic regression (PySR) works well on clean, low-dimensional data but struggles with complex or multi-variate functions.
 
 ### Scalability
+
 Each MLP in the library must be trained to grokking, which is computationally expensive. A library of 10 mathematical operations requires training 10 separate networks, each for potentially tens of thousands of epochs.
 
 ---
@@ -104,7 +111,7 @@ Specifically, we investigate:
 
 ### Three Key Insights
 
-**1. "Soft Math" Advantage** — A grokked MLP's approximation of `cos(x)` carries tiny neural imperfections. In real-world scenarios where physical friction, dampening, and sensor noise produce signals that are *almost-but-not-quite* perfect cosines, these soft approximations may fit better than the rigid mathematical ideal.
+**1. "Soft Math" Advantage** — A grokked MLP's approximation of `cos(x)` carries tiny neural imperfections. In real-world scenarios where physical friction, dampening, and sensor noise produce signals that are _almost-but-not-quite_ perfect cosines, these soft approximations may fit better than the rigid mathematical ideal.
 
 **2. Smooth Differentiability via Gumbel-Softmax** — Standard SINDy treats function selection as discrete. Because our library consists of MLPs (continuous, differentiable functions), we can use Gumbel-Softmax routing to make discrete library selection fully differentiable. A learned router network scores each MLP, and the Gumbel-Softmax trick with temperature annealing smoothly transitions from soft exploration (all MLPs contribute) to hard selection (one MLP wins). The Straight-Through Estimator (STE) ensures compute efficiency: only the winning MLP runs during the forward pass, while smooth gradients flow during backpropagation.
 
@@ -158,34 +165,37 @@ Specifically, we investigate:
 
 ### Datasets
 
-| Dataset | Type | Source | Size | Purpose |
-|---------|------|--------|------|---------|
-| Grokking training data | Synthetic | Random samples from target functions | 500–1000 samples per function | Train MLPs to grok `cos`, `sin`, `+`, `×`, `identity` |
-| Grokking validation data | Synthetic | Held-out random samples | 200–400 samples per function | Verify grokking (delayed generalization) |
-| Damped oscillator trajectory | Synthetic ODE | `scipy.integrate.solve_ivp` (RK45) | 600 time points, dt=0.05, t∈[0,30] | Test SINDy discovery on known dynamics |
-| Distillation probes | Synthetic grid | Uniform linspace | 500–2500 points | Feed clean data through MLPs for PySR extraction |
+| Dataset                      | Type           | Source                               | Size                               | Purpose                                               |
+| ---------------------------- | -------------- | ------------------------------------ | ---------------------------------- | ----------------------------------------------------- |
+| Grokking training data       | Synthetic      | Random samples from target functions | 500–1000 samples per function      | Train MLPs to grok `cos`, `sin`, `+`, `×`, `identity` |
+| Grokking validation data     | Synthetic      | Held-out random samples              | 200–400 samples per function       | Verify grokking (delayed generalization)              |
+| Damped oscillator trajectory | Synthetic ODE  | `scipy.integrate.solve_ivp` (RK45)   | 600 time points, dt=0.05, t∈[0,30] | Test SINDy discovery on known dynamics                |
+| Distillation probes          | Synthetic grid | Uniform linspace                     | 500–2500 points                    | Feed clean data through MLPs for PySR extraction      |
 
 **Ground truth system:**
+
 ```
 ẍ = -k·x - c·ẋ     (damped harmonic oscillator)
 k = 1.0, c = 0.1
 x(0) = 1.0, ẋ(0) = 0.0
 ```
+
 Gaussian noise (σ = 0.001) is added to the state measurements to simulate real-world sensor noise.
 
 ### Machine Learning Techniques
 
-| Technique | Role in Experiment | Implementation |
-|-----------|-------------------|----------------|
-| **MLP Training with Grokking** | Train neural approximations of math functions using AdamW with heavy weight decay to induce grokking | PyTorch, custom `GrokMLP` class |
-| **Sparse Regression (STLSQ)** | *Path A:* Select which MLP basis functions are active in the governing equations | Custom implementation following Brunton et al. |
-| **Ridge Regression** | Sub-routine within STLSQ for numerically stable least-squares fitting | scikit-learn |
-| **Gumbel-Softmax Routing** | *Path B:* End-to-end differentiable discrete MLP selection with temperature annealing and Straight-Through Estimator | PyTorch, custom `GumbelRouter` class |
-| **Symbolic Regression (PySR)** | Extract human-readable symbolic equations from grokked MLP input-output behavior | PySR (evolutionary algorithm with Julia backend) |
+| Technique                      | Role in Experiment                                                                                                   | Implementation                                   |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| **MLP Training with Grokking** | Train neural approximations of math functions using AdamW with heavy weight decay to induce grokking                 | PyTorch, custom `GrokMLP` class                  |
+| **Sparse Regression (STLSQ)**  | _Path A:_ Select which MLP basis functions are active in the governing equations                                     | Custom implementation following Brunton et al.   |
+| **Ridge Regression**           | Sub-routine within STLSQ for numerically stable least-squares fitting                                                | scikit-learn                                     |
+| **Gumbel-Softmax Routing**     | _Path B:_ End-to-end differentiable discrete MLP selection with temperature annealing and Straight-Through Estimator | PyTorch, custom `GumbelRouter` class             |
+| **Symbolic Regression (PySR)** | Extract human-readable symbolic equations from grokked MLP input-output behavior                                     | PySR (evolutionary algorithm with Julia backend) |
 
 ### Experiments
 
 #### Experiment 1: Grokking Verification
+
 - **Training data:** Random samples from each target function
 - **Test data:** Held-out validation set (different random samples, same distribution)
 - **Evaluation metrics:**
@@ -195,6 +205,7 @@ Gaussian noise (σ = 0.001) is added to the state measurements to simulate real-
 - **Success criterion:** Characteristic grokking curve — validation loss drops sharply well after training loss has plateaued
 
 #### Experiment 2: Neural SINDy Discovery
+
 - **Training data:** Damped oscillator state measurements `[x(t), v(t)]` with noise
 - **Test data:** Ground-truth derivative values `[ẋ(t), v̇(t)]` (computed analytically)
 - **Evaluation metrics:**
@@ -205,6 +216,7 @@ Gaussian noise (σ = 0.001) is added to the state measurements to simulate real-
 - **Success criterion:** SINDy selects `identity(v)` for ẋ and `identity(x)` + `identity(v)` for v̇, with coefficients close to `+1.0`, `-1.0`, and `-0.1`
 
 #### Experiment 3: Symbolic Distillation
+
 - **Training data:** Clean synthetic grid through each grokked MLP (no noise)
 - **Test data:** Same grid (deterministic — the MLP is the oracle)
 - **Evaluation metrics:**
@@ -214,6 +226,7 @@ Gaussian noise (σ = 0.001) is added to the state measurements to simulate real-
 - **Success criterion:** PySR recovers `f(x) = x` for identity, `f(x) = cos(x)` for cosine, etc.
 
 #### Experiment 4: Gumbel-Softmax Router Discovery
+
 - **Training data:** 80% of damped oscillator measurements (shuffled)
 - **Test data:** 20% held-out oscillator measurements
 - **Evaluation metrics:**
@@ -228,20 +241,13 @@ Gaussian noise (σ = 0.001) is added to the state measurements to simulate real-
 ## Project Structure
 
 ```
-MLPLibexp1/
-├── README.md                   # This file
-├── requirements.txt            # Python dependencies
-├── grok_mlps.py                # Phase 1: Train grokked MLPs
-├── generate_data.py            # Phase 3: Generate ODE data
-├── neural_sindy.py             # Phase 2: Neural SINDy library + STLSQ
-├── neural_router.py            # Gumbel-Softmax router variant
-├── run_experiment.py           # Phase 4A: STLSQ discovery
-├── run_router_experiment.py    # Phase 4B: Gumbel-Softmax discovery
-├── distill.py                  # Phase 5: Symbolic distillation via PySR
-├── visualize.py                # Generate all visualization plots
-├── checkpoints/                # Saved MLP weights (auto-generated)
-├── data/                       # Saved experimental data (auto-generated)
-└── plots/                      # Generated figures (auto-generated)
+NeuralSINDy/
+├── runner.ipynb            # Dependencies, Phase 1, Phase 2, Phase 3, Phase 4
+├── distill.py                  # Phase 5: Symbolic distillation
+├── visualize.py                # Generate all plots
+├── checkpoints/                # (auto) saved MLP weights
+├── data/                       # (auto) saved ODE data
+└── plots/                      # (auto) all figures
 ```
 
 ---
@@ -249,20 +255,7 @@ MLPLibexp1/
 ## How to Run
 
 ```bash
-# 0. Install dependencies
-pip install torch numpy matplotlib scipy scikit-learn pysr
-
-# 1. Train grokked MLPs (~5-10 min GPU, ~30-60 min CPU)
-python grok_mlps.py
-
-# 2. Generate synthetic ODE data (instant)
-python generate_data.py
-
-# 3A. Run STLSQ discovery — Path A (seconds)
-python run_experiment.py
-
-# 3B. Run Gumbel-Softmax discovery — Path B (seconds)
-python run_router_experiment.py
+# just run the runner.ipynb
 
 # 4. Symbolic distillation via PySR (optional, ~2-5 min per MLP)
 python distill.py
@@ -290,6 +283,7 @@ TRUE EQUATIONS
 ```
 
 This would confirm that:
+
 1. Grokked MLPs can serve as valid SINDy basis functions
 2. Sparse regression correctly identifies which neural modules explain the dynamics
 3. The framework is a viable alternative to hand-crafted symbolic libraries
@@ -298,22 +292,31 @@ This would confirm that:
 
 ## References
 
-1. **SINDy:** Brunton, S. L., Proctor, J. L., & Kutz, J. N. (2016). *Discovering governing equations from data by sparse identification of nonlinear dynamical systems.* PNAS, 113(15), 3932-3937.
+1. **SINDy:** Brunton, S. L., Proctor, J. L., & Kutz, J. N. (2016). _Discovering governing equations from data by sparse identification of nonlinear dynamical systems._ PNAS, 113(15), 3932-3937.
 
-2. **Grokking:** Power, A., Burda, Y., Edwards, H., Babuschkin, I., & Misra, V. (2022). *Grokking: Generalization beyond overfitting on small algorithmic datasets.* arXiv:2201.02177.
+2. **Grokking:** Power, A., Burda, Y., Edwards, H., Babuschkin, I., & Misra, V. (2022). _Grokking: Generalization beyond overfitting on small algorithmic datasets._ arXiv:2201.02177.
 
-3. **PySR:** Cranmer, M. (2023). *Interpretable machine learning for science with PySR and SymbolicRegression.jl.* arXiv:2305.01582.
+3. **PySR:** Cranmer, M. (2023). _Interpretable machine learning for science with PySR and SymbolicRegression.jl._ arXiv:2305.01582.
 
-4. **PySINDy:** de Silva, B. M., et al. (2020). *PySINDy: A Python package for the sparse identification of nonlinear dynamical systems from data.* JOSS, 5(49), 2104.
+4. **PySINDy:** de Silva, B. M., et al. (2020). _PySINDy: A Python package for the sparse identification of nonlinear dynamical systems from data._ JOSS, 5(49), 2104.
 
-5. **Mechanistic Interpretability of Grokking:** Nanda, N., et al. (2023). *Progress measures for grokking via mechanistic interpretability.* ICLR 2023.
+5. **Mechanistic Interpretability of Grokking:** Nanda, N., et al. (2023). _Progress measures for grokking via mechanistic interpretability._ ICLR 2023.
 
-6. **KANs:** Liu, Z., et al. (2024). *KAN: Kolmogorov-Arnold Networks.* arXiv:2404.19756.
+6. **KANs:** Liu, Z., et al. (2024). _KAN: Kolmogorov-Arnold Networks._ arXiv:2404.19756.
 
-7. **Gumbel-Softmax:** Jang, E., Gu, S., & Poole, B. (2017). *Categorical Reparameterization with Gumbel-Softmax.* ICLR 2017.
+7. **Gumbel-Softmax:** Jang, E., Gu, S., & Poole, B. (2017). _Categorical Reparameterization with Gumbel-Softmax._ ICLR 2017.
 
 ---
 
-## License
+## Citation
 
 This is a research proof-of-concept. Use freely for academic purposes.
+
+```
+@unpublished{Aniruddha2026,
+  title  = {{Neural SINDy}: Sparse System Identification with Grokked MLP Libraries},
+  author = {Aniruddha Pandey},
+  year   = {2026},
+  note   = {Manuscript in preparation},
+}
+```

@@ -1,0 +1,133 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\begin{document}
+
+\title{Neural SINDy: Sparse System Identification with Grokked MLP Libraries}
+
+\author{\IEEEauthorblockN{Aniruddha Pandey}
+\IEEEauthorblockA{\textit{Department of Computer Science
+} \\
+\textit{Stevens Institute of Technology}\\
+Hoboken, NJ, USA \\
+apandey10@stevens.edu}
+}
+
+\maketitle
+
+\begin{abstract}
+Discovering governing equations from data is a critical challenge in scientific machine learning. The Sparse Identification of Nonlinear Dynamics (SINDy) framework successfully addresses this by employing sparse regression over a hand-crafted library of mathematical functions. However, standard SINDy relies heavily on correct a priori library selection, struggles with combinatorial search spaces, and is highly sensitive to real-world measurement noise. This paper introduces a novel hybrid approach: replacing rigid mathematical basis functions with small Multilayer Perceptrons (MLPs) trained to ``grok'' fundamental mathematical operations. We propose a pipeline combining grokked neural libraries, sequentially thresholded least squares (STLSQ) or Gumbel-Softmax routing for differentiable term selection, and symbolic distillation via PySR for human-readable equation recovery. Preliminary experiments on a damped harmonic oscillator demonstrate that the framework can mathematically recover true system dynamics with near-exact precision (MSE $\approx 10^{-6}$), while also highlighting and analyzing the emergent challenge of rank-deficient neural libraries due to basis collinearity.
+\end{abstract}
+
+\begin{IEEEkeywords}
+System Identification, SINDy, Grokking, Multilayer Perceptron, Symbolic Regression
+\end{IEEEkeywords}
+
+\section{Introduction}
+Discovering governing equations from data is one of the most important problems in scientific machine learning. The Sparse Identification of Nonlinear Dynamics (SINDy) framework \cite{b1} has emerged as a powerful tool for this task, fitting time-series data to a predefined library of candidate mathematical functions (e.g., polynomials, trigonometric functions) and using sparse regression to select active terms. 
+
+Despite its success on textbook systems, classical SINDy encounters practical limitations. First, the user must correctly guess the contents of the feature library before seeing the data; missing the correct functional form causes the regression to fail silently. Second, searching for complex, composed functions requires exponentially large combinatorial libraries. Finally, rigid analytical functions cannot seamlessly adapt to idiosyncratic sensor noise or systematic distortions present in physical measurements.
+
+This research investigates a novel hybrid methodology: utilizing small Multilayer Perceptrons (MLPs) that have learned to ``grok'' basic mathematical operations (such as cosine, sine, addition, and multiplication) as the basis functions in a SINDy-style framework. We hypothesize that these ``soft'' neural approximations offer unique advantages over their symbolic counterparts: they provide better robustness to real-world noise, enable gradient-based differentiable search via Gumbel-Softmax routing \cite{b7}, and maintain interpretability through symbolic distillation using evolutionary algorithms like PySR \cite{b3}.
+
+\section{Methodology}
+
+The proposed architecture bridges the gap between the interpretability of standard SINDy and the flexibility of continuous neural networks through a multi-phase pipeline.
+
+\subsection{Phase 1: Grokking the MLPs}
+Instead of relying on rigid mathematical formulations, we train a universal set of neural modules. Small MLPs (e.g., 128 hidden units with Tanh or ReLU activations) are trained on synthetic random samples to learn specific target functions such as $identity(x)$, $\cos(x)$, $\sin(x)$, $add(x,y)$, and $mul(x,y)$. By employing AdamW optimization with heavy weight decay, we induce ``grokking'' \cite{b2}---a phenomenon where the network suddenly generalizes perfectly to unseen data long after memorizing the training set.
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{./grokking_curves.png}}
+\caption{Training versus validation loss curves demonstrating the grokking phenomenon. Validation loss drops sharply to achieve delayed generalization well after the training loss has plateaued.}
+\label{fig:grokking}
+\end{figure}
+
+\subsection{Phase 2: Neural SINDy Library Formulation}
+Given state data $\mathbf{X}$ and its time derivatives $\dot{\mathbf{X}}$, classical SINDy solves $\dot{\mathbf{X}} = \mathbf{\Theta}(\mathbf{X}) \mathbf{\Xi}$, where $\mathbf{\Theta}$ is a feature matrix and $\mathbf{\Xi}$ is a sparse coefficient vector. In our approach, $\mathbf{\Theta}(\mathbf{X})$ is constructed by evaluating the grokked MLPs over the state variables.
+
+\subsection{Phase 3: Differentiable Equation Discovery}
+To discover the sparse coefficients, we explore two parallel paths:
+\begin{itemize}
+    \item \textbf{Path A (Classical):} Sequentially Thresholded Least Squares (STLSQ) \cite{b1} regression over the neural feature matrix.
+    \item \textbf{Path B (End-to-End):} A Gumbel-Softmax router \cite{b7} that learns to make discrete MLP selections via gradient descent. Temperature annealing transitions from soft exploration to hard selection, allowing smooth gradients to flow during backpropagation via the Straight-Through Estimator.
+\end{itemize}
+
+\subsection{Phase 4: Symbolic Distillation}
+To recover human-readable equations, the clean output from the winning grokked MLPs is fed into PySR \cite{b3}, a symbolic regression engine, which distills the neural approximations back into explicit mathematical notation.
+
+\section{Experimental Setup}
+
+The framework was evaluated on a synthetic damped harmonic oscillator system governed by the equations:
+\begin{equation}
+\ddot{x} = -k x - c \dot{x}
+\end{equation}
+where $k = 1.0$ and $c = 0.1$, with initial conditions $x(0) = 1.0, \dot{x}(0) = 0.0$. The dataset consists of 600 time points with a time step of $dt = 0.05$. Gaussian noise ($\sigma = 0.001$) was added to the state measurements to simulate real-world sensor noise.
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{./oscillator_data.png}}
+\caption{Phase portrait and time series of the simulated damped harmonic oscillator dataset, including the addition of Gaussian noise to mimic real-world sensor measurements.}
+\label{fig:osc_data}
+\end{figure}
+
+For the baseline experiment, an 8-term library was constructed using the grokked MLPs:
+\[
+\begin{aligned}
+\relax[ &\operatorname{identity}(x), \operatorname{identity}(v), \cos(x), \cos(v), \\
+  &\sin(x), \sin(v), \operatorname{add}(x,v), \operatorname{mul}(x,v) ]
+\end{aligned}
+\]
+STLSQ with a ridge penalty of $\alpha = 0.01$ and an optimal sparsity threshold of $0.2$ was utilized.
+
+\section{Preliminary Results and Discussion}
+
+\subsection{Baseline STLSQ Discovery (Experiment 1)}
+The initial discovery run successfully identified the mathematical equivalent of the true governing dynamics. The system produced the following sparse representations:
+\begin{align}
+\dot{x} &= -0.3325 \cdot identity(x) + 0.6675 \cdot identity(v) \nonumber \\ 
+        &\quad + 0.3324 \cdot add(x,v) \\
+\dot{v} &= -0.6322 \cdot identity(x) + 0.2677 \cdot identity(v) \nonumber \\
+        &\quad - 0.3676 \cdot add(x,v)
+\end{align}
+
+Because the network perfectly grokked the operations, $add(x,v) \approx x + v$. Substituting and simplifying these discovered terms yields:
+\begin{align}
+\dot{x} &\approx -0.0001 \cdot x + 0.9999 \cdot v \\
+\dot{v} &\approx -0.9998 \cdot x - 0.0999 \cdot v
+\end{align}
+This result represents a near-exact mathematical match to the ground truth ($\dot{x} = 1.0v$ and $\dot{v} = -1.0x - 0.1v$), exhibiting a Mean Squared Error (MSE) of $0.000001$.
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{./discovery_comparison.png}}
+\caption{Comparison of the ground truth system trajectories against the trajectories forward-simulated using the discovered neural SINDy equations.}
+\label{fig:comparison}
+\end{figure}
+
+\subsection{The Collinearity Challenge}
+While mathematically correct, Experiment 1 highlighted a critical challenge in using composite neural basis functions. Six out of sixteen terms remained active, meaning the coefficients were spread across redundant operations. 
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{./coefficients.png}}
+\caption{Bar chart displaying the discovered sparse coefficients. The chart highlights the distribution of weights across collinear terms (e.g., $identity$ and $add$), illustrating the rank-deficiency challenge.}
+\label{fig:coeffs}
+\end{figure}
+
+Specifically, the $add(x,v)$ MLP is mathematically identical to $identity(x) + identity(v)$. This linear dependence creates a rank-deficient library matrix $\mathbf{\Theta}$. Consequently, the STLSQ optimizer distributes the coefficients arbitrarily across the redundant terms (Fig. \ref{fig:coeffs}). While the combined system output is highly accurate (Fig. \ref{fig:comparison}), the individual coefficients lose direct human interpretability without manual simplification. This implies that future iterations of the neural library must explicitly avoid terms that are linear combinations of others, or incorporate a pre-processing collinearity detection step.
+
+\section{Conclusion and Future Work}
+This work demonstrates the viability of utilizing neural networks trained via grokking as basis functions for sparse system identification. The framework successfully captured the underlying dynamics of a noisy dynamical system with extreme accuracy. 
+
+Future work will address the collinearity issue by curating strictly independent neural libraries (Experiment 2). Furthermore, we will formally benchmark the STLSQ approach against the Gumbel-Softmax routing paradigm (Experiment 3) to validate whether end-to-end differentiable combinatorial search outperforms classical sparse regression in both accuracy and basis sparsity.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
