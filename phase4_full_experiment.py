@@ -1,4 +1,4 @@
-from huggingface_hub import hf_hub_download
+from phase1_train_mlp import GrokMLP, load_grokked_mlp
 
 def simulate_discovered_system(xi, term_names, library, x0, t_span, dt):
     """
