@@ -11,7 +11,7 @@ from matplotlib.gridspec import GridSpec
 from pathlib import Path
 import json
 
-from neural_sindy import load_grokked_mlp
+from phase3_neural_sindy import load_grokked_mlp
 
 
 def plot_mlp_approximations(ckpt_dir="checkpoints", plots_dir="plots"):

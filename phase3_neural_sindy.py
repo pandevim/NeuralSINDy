@@ -1,3 +1,11 @@
+import numpy as np
+import torch
+import torch.nn as nn
+from sklearn.linear_model import Ridge
+from huggingface_hub import hf_hub_download
+
+from phase1_train_mlp import GrokMLP
+
 # ─── MLP Library ─────────────────────────────────────────────────────────────
 
 class MLPLibraryTerm:

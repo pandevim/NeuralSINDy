@@ -24,7 +24,7 @@ except ImportError:
     print("⚠ PySR not installed. Install with: pip install pysr")
     print("  (Requires Julia — PySR will auto-install it on first run)")
 
-from neural_sindy import load_grokked_mlp
+from phase3_neural_sindy import load_grokked_mlp
 
 
 def distill_unary_mlp(model, name, x_range=(-6.0, 6.0), n_points=500):

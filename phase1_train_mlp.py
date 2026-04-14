@@ -1,3 +1,19 @@
+import io
+import json
+
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import matplotlib.pyplot as plt
+import wandb
+from huggingface_hub import HfApi
+from tqdm import tqdm
+
+HF_REPO_ID = "pandevim/cs810"
+device = "cuda" if torch.cuda.is_available() else "cpu"
+api = HfApi()
+
 # ─── MLP Architecture ────────────────────────────────────────────────────────
 
 class GrokMLP(nn.Module):
@@ -115,153 +131,155 @@ def train_grok(
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
-# ── Define the functions to grok ──
-tasks = {
-    "cos": {
-        "func": lambda x: np.cos(x),
-        "input_dim": 1,
-        "activation": "tanh",
-        "data_fn": lambda f: make_unary_data(f),
-        "epochs": 20000,
-        "weight_decay": 1.0,
-        "lr": 1e-3,
-    },
-    "sin": {
-        "func": lambda x: np.sin(x),
-        "input_dim": 1,
-        "activation": "tanh",
-        "data_fn": lambda f: make_unary_data(f),
-        "epochs": 20000,
-        "weight_decay": 1.0,
-        "lr": 1e-3,
-    },
-    "add": {
-        "func": lambda x, y: x + y,
-        "input_dim": 2,
-        "activation": "relu",
-        "data_fn": lambda f: make_binary_data(f),
-        "epochs": 15000,
-        "weight_decay": 0.5,
-        "lr": 1e-3,
-    },
-    "mul": {
-        "func": lambda x, y: x * y,
-        "input_dim": 2,
-        "activation": "relu",
-        "data_fn": lambda f: make_binary_data(f),
-        "epochs": 20000,
-        "weight_decay": 0.5,
-        "lr": 1e-3,
-    },
-    "identity": {
-        "func": lambda x: x,
-        "input_dim": 1,
-        "activation": "relu",
-        "data_fn": lambda f: make_unary_data(f, x_range=(-5.0, 5.0)),
-        "epochs": 10000,
-        "weight_decay": 1.0,
-        "lr": 1e-3,
-    },
-}
 
-all_histories = {}
-
-for name, cfg in tasks.items():
-    print(f"{'='*60}")
-    print(f"  Training MLP_{name}")
-    print(f"{'='*60}")
-
-    # Build model
-    model = GrokMLP(
-        input_dim=cfg["input_dim"],
-        hidden_dim=128,
-        num_layers=2,
-        activation=cfg["activation"],
-    )
-
-    # Generate data
-    x_train, y_train, x_val, y_val = cfg["data_fn"](cfg["func"])
-    wandb.init(
-        project="cs810",
-        name=f"MLP_{name}",
-        config={
-            "epochs": cfg["epochs"],
-            "lr": cfg["lr"],
-            "weight_decay": cfg["weight_decay"],
-            "activation": cfg["activation"],
-            "input_dim": cfg["input_dim"],
-            "hidden_dim": 128,
-            "num_layers": 2,
+if __name__ == "__main__":
+    # ── Define the functions to grok ──
+    tasks = {
+        "cos": {
+            "func": lambda x: np.cos(x),
+            "input_dim": 1,
+            "activation": "tanh",
+            "data_fn": lambda f: make_unary_data(f),
+            "epochs": 20000,
+            "weight_decay": 1.0,
+            "lr": 1e-3,
         },
-        reinit="finish_previous",
-    )
-    wandb.watch(model, log="all", log_freq=500)
+        "sin": {
+            "func": lambda x: np.sin(x),
+            "input_dim": 1,
+            "activation": "tanh",
+            "data_fn": lambda f: make_unary_data(f),
+            "epochs": 20000,
+            "weight_decay": 1.0,
+            "lr": 1e-3,
+        },
+        "add": {
+            "func": lambda x, y: x + y,
+            "input_dim": 2,
+            "activation": "relu",
+            "data_fn": lambda f: make_binary_data(f),
+            "epochs": 15000,
+            "weight_decay": 0.5,
+            "lr": 1e-3,
+        },
+        "mul": {
+            "func": lambda x, y: x * y,
+            "input_dim": 2,
+            "activation": "relu",
+            "data_fn": lambda f: make_binary_data(f),
+            "epochs": 20000,
+            "weight_decay": 0.5,
+            "lr": 1e-3,
+        },
+        "identity": {
+            "func": lambda x: x,
+            "input_dim": 1,
+            "activation": "relu",
+            "data_fn": lambda f: make_unary_data(f, x_range=(-5.0, 5.0)),
+            "epochs": 10000,
+            "weight_decay": 1.0,
+            "lr": 1e-3,
+        },
+    }
 
-    # Train
-    history = train_grok(
-        model, x_train, y_train, x_val, y_val,
-        epochs=cfg["epochs"],
-        lr=cfg["lr"],
-        weight_decay=cfg["weight_decay"],
-        device=device,
-    )
+    all_histories = {}
 
-    all_histories[name] = history
-    wandb.finish()
+    for name, cfg in tasks.items():
+        print(f"{'='*60}")
+        print(f"  Training MLP_{name}")
+        print(f"{'='*60}")
 
-    # Save model
+        # Build model
+        model = GrokMLP(
+            input_dim=cfg["input_dim"],
+            hidden_dim=128,
+            num_layers=2,
+            activation=cfg["activation"],
+        )
+
+        # Generate data
+        x_train, y_train, x_val, y_val = cfg["data_fn"](cfg["func"])
+        wandb.init(
+            project="cs810",
+            name=f"MLP_{name}",
+            config={
+                "epochs": cfg["epochs"],
+                "lr": cfg["lr"],
+                "weight_decay": cfg["weight_decay"],
+                "activation": cfg["activation"],
+                "input_dim": cfg["input_dim"],
+                "hidden_dim": 128,
+                "num_layers": 2,
+            },
+            reinit="finish_previous",
+        )
+        wandb.watch(model, log="all", log_freq=500)
+
+        # Train
+        history = train_grok(
+            model, x_train, y_train, x_val, y_val,
+            epochs=cfg["epochs"],
+            lr=cfg["lr"],
+            weight_decay=cfg["weight_decay"],
+            device=device,
+        )
+
+        all_histories[name] = history
+        wandb.finish()
+
+        # Save model
+        buf = io.BytesIO()
+        torch.save({"model_state_dict": model.state_dict(), "input_dim": cfg["input_dim"],
+                    "activation": cfg["activation"], "hidden_dim": 128, "num_layers": 2}, buf)
+        api.upload_file(path_or_fileobj=io.BytesIO(buf.getvalue()),
+                        path_in_repo=f"phase1/checkpoints/mlp_{name}.pt",
+                        repo_id=HF_REPO_ID, commit_message=f"Add mlp_{name}")
+
+        # Final validation error
+        model.eval()
+        with torch.no_grad():
+            x_val_dev = x_val.to(device)
+            y_val_dev = y_val.to(device)
+            val_pred = model(x_val_dev)
+            final_mse = nn.MSELoss()(val_pred, y_val_dev).item()
+            # Relative error
+            y_range = (y_val_dev.max() - y_val_dev.min()).item()
+            rel_err = np.sqrt(final_mse) / max(y_range, 1e-8) * 100
+            print(f"\n  ✓ MLP_{name} — Final Val MSE: {final_mse:.6f}, "
+                  f"Relative Error: {rel_err:.2f}%\n")
+
+    # ── Plot grokking curves ──
+    fig, axes = plt.subplots(2, 3, figsize=(15, 8))
+    axes = axes.flatten()
+    for idx, (name, hist) in enumerate(all_histories.items()):
+        ax = axes[idx]
+        ax.semilogy(hist["epoch"], hist["train_loss"], label="Train", alpha=0.8)
+        ax.semilogy(hist["epoch"], hist["val_loss"], label="Val", alpha=0.8)
+        ax.set_title(f"MLP_{name}", fontsize=12, fontweight="bold")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("MSE Loss (log)")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+    # Hide unused subplot
+    if len(all_histories) < len(axes):
+        for j in range(len(all_histories), len(axes)):
+            axes[j].set_visible(False)
+
+    plt.suptitle("Grokking Curves: Train vs Validation Loss", fontsize=14, fontweight="bold")
+    plt.tight_layout()
     buf = io.BytesIO()
-    torch.save({"model_state_dict": model.state_dict(), "input_dim": cfg["input_dim"],
-                "activation": cfg["activation"], "hidden_dim": 128, "num_layers": 2}, buf)
+    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight")
     api.upload_file(path_or_fileobj=io.BytesIO(buf.getvalue()),
-                    path_in_repo=f"phase1/checkpoints/mlp_{name}.pt",
-                    repo_id=HF_REPO_ID, commit_message=f"Add mlp_{name}")
+                    path_in_repo="paper/grokking_curves.png",
+                    repo_id=HF_REPO_ID, commit_message="Add grokking curves plot")
+    plt.close()
+    print(f"\n✓ Grokking curves saved to paper/grokking_curves.png")
 
-    # Final validation error
-    model.eval()
-    with torch.no_grad():
-        x_val_dev = x_val.to(device)
-        y_val_dev = y_val.to(device)
-        val_pred = model(x_val_dev)
-        final_mse = nn.MSELoss()(val_pred, y_val_dev).item()
-        # Relative error
-        y_range = (y_val_dev.max() - y_val_dev.min()).item()
-        rel_err = np.sqrt(final_mse) / max(y_range, 1e-8) * 100
-        print(f"\n  ✓ MLP_{name} — Final Val MSE: {final_mse:.6f}, "
-              f"Relative Error: {rel_err:.2f}%\n")
+    # Save histories
+    api.upload_file(path_or_fileobj=io.BytesIO(json.dumps(all_histories, indent=2).encode()),
+                    path_in_repo="phase1/checkpoints/training_histories.json",
+                    repo_id=HF_REPO_ID, commit_message="Add training histories")
 
-# ── Plot grokking curves ──
-fig, axes = plt.subplots(2, 3, figsize=(15, 8))
-axes = axes.flatten()
-for idx, (name, hist) in enumerate(all_histories.items()):
-    ax = axes[idx]
-    ax.semilogy(hist["epoch"], hist["train_loss"], label="Train", alpha=0.8)
-    ax.semilogy(hist["epoch"], hist["val_loss"], label="Val", alpha=0.8)
-    ax.set_title(f"MLP_{name}", fontsize=12, fontweight="bold")
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("MSE Loss (log)")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-
-# Hide unused subplot
-if len(all_histories) < len(axes):
-    for j in range(len(all_histories), len(axes)):
-        axes[j].set_visible(False)
-
-plt.suptitle("Grokking Curves: Train vs Validation Loss", fontsize=14, fontweight="bold")
-plt.tight_layout()
-buf = io.BytesIO()
-plt.savefig(buf, format="png", dpi=150, bbox_inches="tight")
-api.upload_file(path_or_fileobj=io.BytesIO(buf.getvalue()),
-                path_in_repo="paper/grokking_curves.png",
-                repo_id=HF_REPO_ID, commit_message="Add grokking curves plot")
-plt.close()
-print(f"\n✓ Grokking curves saved to paper/grokking_curves.png")
-
-# Save histories
-api.upload_file(path_or_fileobj=io.BytesIO(json.dumps(all_histories, indent=2).encode()),
-                path_in_repo="phase1/checkpoints/training_histories.json",
-                repo_id=HF_REPO_ID, commit_message="Add training histories")
-
-print("\n✓ All models saved to checkpoints/")
-print("✓ Done!")
+    print("\n✓ All models saved to checkpoints/")
+    print("✓ Done!")
