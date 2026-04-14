@@ -5,10 +5,6 @@ import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 from huggingface_hub import HfApi
 
-HF_REPO_ID = "pandevim/cs810"
-api = HfApi()
-
-
 def generate_damped_oscillator(
     k=1.0, c=0.1,
     x0=1.0, v0=0.0,
@@ -50,6 +46,9 @@ def generate_damped_oscillator(
     return t, X_noisy, dXdt, {"k": k, "c": c}
 
 if __name__ == "__main__":
+    HF_REPO_ID = globals().get("HF_REPO_ID", "pandevim/cs810")
+    api = globals().get("api", HfApi())
+
     print("Generating damped harmonic oscillator data...")
     print("  ẍ = -k·x - c·ẋ  with k=1.0, c=0.1")
     print("  x(0) = 1.0, ẋ(0) = 0.0\n")

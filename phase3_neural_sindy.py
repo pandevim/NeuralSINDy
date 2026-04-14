@@ -33,11 +33,12 @@ class MLPLibraryTerm:
         """
         self.model.eval()
         with torch.no_grad():
-            # Select relevant columns
+            # Select relevant columns, move to same device as model
+            device = next(self.model.parameters()).device
             x_in = torch.from_numpy(
                 X[:, self.input_columns].astype(np.float32)
-            )
-            out = self.model(x_in).numpy()
+            ).to(device)
+            out = self.model(x_in).cpu().numpy()
         return out
 
 

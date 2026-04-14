@@ -10,9 +10,6 @@ import wandb
 from huggingface_hub import HfApi
 from tqdm import tqdm
 
-HF_REPO_ID = "pandevim/cs810"
-device = "cuda" if torch.cuda.is_available() else "cpu"
-api = HfApi()
 
 # ─── MLP Architecture ────────────────────────────────────────────────────────
 
@@ -133,6 +130,10 @@ def train_grok(
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    HF_REPO_ID = globals().get("HF_REPO_ID", "pandevim/cs810")
+    device = globals().get("device", "cuda" if torch.cuda.is_available() else "cpu")
+    api = globals().get("api", HfApi())
+
     # ── Define the functions to grok ──
     tasks = {
         "cos": {
