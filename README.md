@@ -306,6 +306,11 @@ This would confirm that:
 
 7. **Gumbel-Softmax:** Jang, E., Gu, S., & Poole, B. (2017). _Categorical Reparameterization with Gumbel-Softmax._ ICLR 2017.
 
+8. The main _SINDy_ paper my idea extend [Discovering governing equations from data: Sparse identification of nonlinear dynamical systems](https://arxiv.org/pdf/1509.03580)
+9. Library Generation: [GROKKING: GENERALIZATION BEYOND OVERFIT-TING ON SMALL ALGORITHMIC DATASETS](https://arxiv.org/pdf/2201.02177)
+10. Arithmetics: [Grokking modular arithmetic](https://arxiv.org/pdf/2301.02679)
+11. Router: [Categorical Reparameterization with Gumbel-Softmax](https://arxiv.org/pdf/1611.01144)
+
 ---
 
 ## Citation
