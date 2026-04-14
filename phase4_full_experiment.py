@@ -8,9 +8,6 @@ from huggingface_hub import hf_hub_download, HfApi
 
 from phase3_neural_sindy import load_grokked_mlp, NeuralSINDyLibrary, build_default_library, discover_equations
 
-HF_REPO_ID = "pandevim/cs810"
-api = HfApi()
-
 def simulate_discovered_system(xi, term_names, library, x0, t_span, dt):
     """
     Simulate the discovered system forward in time.
@@ -29,6 +26,9 @@ def simulate_discovered_system(xi, term_names, library, x0, t_span, dt):
     return sol.t, sol.y.T
 
 if __name__ == "__main__":
+    HF_REPO_ID = globals().get("HF_REPO_ID", "pandevim/cs810")
+    api = globals().get("api", HfApi())
+
     # ── Load data ──
     print("Loading oscillator data...")
     path = hf_hub_download(repo_id=HF_REPO_ID, filename="phase1/data/oscillator_data.npz")
