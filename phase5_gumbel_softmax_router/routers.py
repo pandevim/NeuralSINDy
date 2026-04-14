@@ -312,10 +312,31 @@ class TopKRouter(RouterBase):
         return summary
 
     def logit_entropy(self):
-        ent = torch.tensor(0.0)
+        """
+        Conditional slot entropy.
+
+        Exp 3's original version penalised the base distribution, which drove it
+        one-hot and left slot 2 with a flat conditional — preventing commitment.
+
+        This version iterates through slots exactly as forward() does, computing
+        H(slot_j | slot_0..j-1 chosen) and summing across slots and derivatives.
+        Each slot's conditional distribution is penalised independently, so every
+        slot commits rather than just the first.
+
+        Mask advance uses detached argmax (the expected winner at low τ), mirroring
+        the detached gate in forward() so no gradient flows through the mask.
+        """
+        ent = torch.tensor(0.0, device=self.complexity_prior.device)
         for d in range(self.state_dim):
-            probs = F.softmax(self.routers[d] + self.complexity_prior, dim=-1)
-            ent = ent + -(probs * (probs + 1e-10).log()).sum()
+            base = self.routers[d] + self.complexity_prior  # (n_mlps,)
+            mask = torch.zeros_like(base)
+            for _ in range(self.k):
+                logits = base + mask
+                probs = F.softmax(logits, dim=-1)
+                ent = ent + -(probs * (probs + 1e-10).log()).sum()
+                winner = probs.detach().argmax()
+                mask = mask.clone()
+                mask[winner] = -1e9
         return ent
 
 

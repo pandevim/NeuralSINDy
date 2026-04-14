@@ -3,11 +3,12 @@ Phase 5: Gumbel-Softmax Neural Router for MLP Library Selection.
 
 Public API
 ----------
-    from phase5_gumbel_softmax_router import exp1, exp2, exp3
+    from phase5_gumbel_softmax_router import exp1, exp2, exp3, exp4
 
     router, history, summary, scorecard = exp1.run(load_grokked_mlp, HF_REPO_ID, device)
     router, history, summary, scorecard = exp2.run(load_grokked_mlp, HF_REPO_ID, device)
     router, history, summary, scorecard = exp3.run(load_grokked_mlp, HF_REPO_ID, device)
+    router, history, summary, scorecard = exp4.run(load_grokked_mlp, HF_REPO_ID, device)
 
 Library ablation example
 --------------------------
