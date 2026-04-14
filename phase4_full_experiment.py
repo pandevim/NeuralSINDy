@@ -1,3 +1,5 @@
+from huggingface_hub import hf_hub_download
+
 def simulate_discovered_system(xi, term_names, library, x0, t_span, dt):
     """
     Simulate the discovered system forward in time.
