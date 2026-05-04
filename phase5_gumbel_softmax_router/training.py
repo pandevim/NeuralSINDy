@@ -37,6 +37,9 @@ class TrainConfig:
     # Set to 0 to disable (Exp 1 style — state-dep router).
     entropy_weight_max: float = 0.05
     log_every: int = 200
+    # If True, evaluate val with deterministic argmax routing (no Gumbel noise).
+    # Default False reproduces the historical stochastic-val behavior.
+    deterministic_val: bool = False
 
 
 def train_router(router, X_train, dXdt_train, X_val, dXdt_val, cfg, device="cpu"):
@@ -91,7 +94,10 @@ def train_router(router, X_train, dXdt_train, X_val, dXdt_val, cfg, device="cpu"
         if epoch % cfg.log_every == 0 or epoch == 1:
             router.eval()
             with torch.no_grad():
-                val_pred, _ = router(X_vl, temperature=tau, hard=True)
+                val_pred, _ = router(
+                    X_vl, temperature=tau, hard=True,
+                    noise=not cfg.deterministic_val,
+                )
                 val_loss = criterion(val_pred, dX_vl)
 
             history["epoch"].append(epoch)

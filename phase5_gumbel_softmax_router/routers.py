@@ -43,7 +43,7 @@ import torch.nn.functional as F
 
 # ── Gumbel-Softmax primitive ─────────────────────────────────────────────────
 
-def gumbel_softmax(logits, temperature=1.0, hard=True):
+def gumbel_softmax(logits, temperature=1.0, hard=True, noise=True):
     """
     Gumbel-Softmax with Straight-Through Estimator (STE).
 
@@ -51,14 +51,20 @@ def gumbel_softmax(logits, temperature=1.0, hard=True):
         logits:      (batch, n_choices)
         temperature: τ — high = soft/exploratory, low = hard/discrete
         hard:        if True, forward is one-hot, backward uses soft gradients
+        noise:       if False, skip Gumbel sampling — deterministic argmax over
+                     logits when hard=True. Use at eval to remove val-MSE spikes.
 
     Returns:
         (batch, n_choices) — one-hot in forward pass when hard=True
     """
-    gumbel_noise = -torch.log(-torch.log(
-        torch.rand_like(logits).clamp(min=1e-10)
-    ))
-    y_soft = F.softmax((logits + gumbel_noise) / temperature, dim=-1)
+    if noise:
+        gumbel_noise = -torch.log(-torch.log(
+            torch.rand_like(logits).clamp(min=1e-10)
+        ))
+        scores = logits + gumbel_noise
+    else:
+        scores = logits
+    y_soft = F.softmax(scores / temperature, dim=-1)
     if hard:
         index = y_soft.max(dim=-1, keepdim=True)[1]
         y_hard = torch.zeros_like(logits).scatter_(-1, index, 1.0)
@@ -133,7 +139,7 @@ class StateDepRouter(RouterBase):
             nn.Parameter(torch.zeros(self.n_mlps)) for _ in range(state_dim)
         ])
 
-    def forward(self, X, temperature=1.0, hard=True):
+    def forward(self, X, temperature=1.0, hard=True, noise=True):
         """
         Returns:
             dXdt_pred: (batch, state_dim)
@@ -144,7 +150,7 @@ class StateDepRouter(RouterBase):
 
         for d in range(self.state_dim):
             logits = self.routers[d](X)  # (batch, n_mlps)
-            gate = gumbel_softmax(logits, temperature=temperature, hard=hard)
+            gate = gumbel_softmax(logits, temperature=temperature, hard=hard, noise=noise)
             all_gates.append(gate)
             weighted = (gate * self.coefficients[d].unsqueeze(0)) * mlp_out
             dXdt_pred.append(weighted.sum(dim=1, keepdim=True))
@@ -152,10 +158,10 @@ class StateDepRouter(RouterBase):
         return (torch.cat(dXdt_pred, dim=1),
                 torch.stack(all_gates, dim=0))
 
-    def get_routing_summary(self, X, temperature=0.01):
+    def get_routing_summary(self, X, temperature=0.01, noise=True):
         self.eval()
         with torch.no_grad():
-            _, gates = self.forward(X, temperature=temperature, hard=True)
+            _, gates = self.forward(X, temperature=temperature, hard=True, noise=noise)
         avg_gates = gates.mean(dim=1)  # (state_dim, n_mlps)
         return _make_summary(self, avg_gates)
 
@@ -186,7 +192,7 @@ class StateIndepRouter(RouterBase):
             nn.Parameter(torch.zeros(self.n_mlps)) for _ in range(state_dim)
         ])
 
-    def forward(self, X, temperature=1.0, hard=True):
+    def forward(self, X, temperature=1.0, hard=True, noise=True):
         """
         Returns:
             dXdt_pred: (batch, state_dim)
@@ -199,7 +205,7 @@ class StateIndepRouter(RouterBase):
         for d in range(self.state_dim):
             # Broadcast global logits so each sample still draws its own Gumbel noise.
             logits = self.routers[d].unsqueeze(0).expand(batch_size, -1)
-            gate = gumbel_softmax(logits, temperature=temperature, hard=hard)
+            gate = gumbel_softmax(logits, temperature=temperature, hard=hard, noise=noise)
             all_gates.append(gate)
             weighted = (gate * self.coefficients[d].unsqueeze(0)) * mlp_out
             dXdt_pred.append(weighted.sum(dim=1, keepdim=True))
@@ -207,10 +213,10 @@ class StateIndepRouter(RouterBase):
         return (torch.cat(dXdt_pred, dim=1),
                 torch.stack(all_gates, dim=0))
 
-    def get_routing_summary(self, X, temperature=0.01):
+    def get_routing_summary(self, X, temperature=0.01, noise=True):
         self.eval()
         with torch.no_grad():
-            _, gates = self.forward(X, temperature=temperature, hard=True)
+            _, gates = self.forward(X, temperature=temperature, hard=True, noise=noise)
         avg_gates = gates.mean(dim=1)
         return _make_summary(self, avg_gates)
 
@@ -250,7 +256,7 @@ class TopKRouter(RouterBase):
             complexity_prior = torch.zeros(self.n_mlps)
         self.register_buffer("complexity_prior", complexity_prior.float())
 
-    def forward(self, X, temperature=1.0, hard=True):
+    def forward(self, X, temperature=1.0, hard=True, noise=True):
         """
         Returns:
             dXdt_pred: (batch, state_dim)
@@ -267,7 +273,7 @@ class TopKRouter(RouterBase):
             dxdt_d = torch.zeros(batch_size, 1, device=X.device)
 
             for j in range(self.k):
-                gate_j = gumbel_softmax(base_logits + mask, temperature=temperature, hard=hard)
+                gate_j = gumbel_softmax(base_logits + mask, temperature=temperature, hard=hard, noise=noise)
                 slot_gates.append(gate_j)
                 # Exclude this pick from future slots (detached so mask doesn't carry gradient).
                 mask = mask + (-1e9) * gate_j.detach()
@@ -280,10 +286,10 @@ class TopKRouter(RouterBase):
         return (torch.cat(dXdt_pred, dim=1),
                 torch.stack(all_gates, dim=0))
 
-    def get_routing_summary(self, X, temperature=0.01):
+    def get_routing_summary(self, X, temperature=0.01, noise=True):
         self.eval()
         with torch.no_grad():
-            _, gates = self.forward(X, temperature=temperature, hard=True)
+            _, gates = self.forward(X, temperature=temperature, hard=True, noise=noise)
         # gates: (state_dim, k, batch, n_mlps) — collapse slots and batch.
         avg = gates.mean(dim=2)  # (state_dim, k, n_mlps)
 
