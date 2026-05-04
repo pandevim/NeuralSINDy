@@ -33,9 +33,9 @@
 \section{Introduction}
 Discovering governing equations from data is one of the most important problems in scientific machine learning. The Sparse Identification of Nonlinear Dynamics (SINDy) framework \cite{b1} has emerged as a powerful tool for this task, fitting time-series data to a predefined library of candidate mathematical functions (e.g., polynomials, trigonometric functions) and using sparse regression to select active terms.
 
-Despite its success on textbook systems, classical SINDy encounters practical limitations. First, the user must correctly guess the contents of the feature library before seeing the data; missing the correct functional form causes the regression to fail silently. Second, searching for complex, composed functions requires exponentially large combinatorial libraries. Finally, rigid analytical functions cannot seamlessly adapt to idiosyncratic sensor noise or systematic distortions present in physical measurements.
+Despite its success on textbook systems, classical SINDy encounters practical limitations. First, the user must specify the candidate library a priori; if the true functional form is absent from the library, the regression can return a confidently wrong sparse fit rather than signaling failure. Second, searching for complex composed functions requires combinatorially large libraries. Finally, fixed analytical primitives may struggle to absorb idiosyncratic sensor noise or systematic distortions present in real measurements without explicit preprocessing.
 
-This research investigates a novel hybrid methodology: utilizing small Multilayer Perceptrons (MLPs) that have learned to ``grok'' basic mathematical operations (such as cosine, sine, addition, and multiplication) as the basis functions in a SINDy-style framework. We hypothesize that these ``soft'' neural approximations offer unique advantages over their symbolic counterparts: they provide better robustness to real-world noise, enable gradient-based differentiable search via Gumbel-Softmax routing \cite{b7}, and maintain interpretability through symbolic distillation using evolutionary algorithms like PySR \cite{b3}.
+This research investigates a hybrid methodology: utilizing small Multilayer Perceptrons (MLPs) that have learned to ``grok'' basic mathematical operations (such as cosine, sine, addition, and multiplication) as the basis functions in a SINDy-style framework. We hypothesize that these ``soft'' neural approximations may offer practical advantages over their symbolic counterparts. They are differentiable end-to-end, enabling gradient-based search via Gumbel-Softmax routing \cite{b7}; they may exhibit smoother behavior under measurement noise than rigid analytical primitives (an empirical question we leave to future work); and interpretability can be recovered post-hoc by distilling the trained library through symbolic regression with PySR \cite{b3}.
 
 \section{Related Work}
 
@@ -51,14 +51,14 @@ More recently, frameworks such as VaSST (Variational Inference for Symbolic Regr
 Recent architectures have also sought to embed discrete symbolic structures directly inside trainable deep networks. A notable example is the Kolmogorov-Arnold Network (KAN) \cite{b6}, which utilizes learnable splines on network edges. Building upon this, Symbolic-KAN \cite{b10} introduces a discrete symbolic structure via hierarchical gating and Gumbel-Softmax routing \cite{b7}. As the Gumbel temperature anneals, Symbolic-KAN forces the network to progressively sharpen continuous mixtures into one-hot selections of analytic primitives.
 
 \subsection{Proposed Contribution}
-If standard SINDy relies on rigid basis functions, and methods like Symbolic-KAN route over exact mathematical primitives, our proposed architecture offers a fundamental departure: utilizing "grokked" Multilayer Perceptrons (MLPs) \cite{b2} as the candidate functions. This neural hybridization offers two distinct theoretical advantages over exact mathematical libraries. First, neural approximations naturally smooth idiosyncratic noise rather than propagating it deterministically. Second, the slight variance inherent in neural approximations provides a unique mathematical texture that relaxes the strict collinearity of redundant terms (e.g., an addition operator versus its distinct linear components), thereby aiding the differentiable router in resolving otherwise rank-deficient systems.
+If standard SINDy relies on rigid basis functions, and methods like Symbolic-KAN route over exact mathematical primitives, our proposed architecture differs in using ``grokked'' Multilayer Perceptrons (MLPs) \cite{b2} as the candidate functions. This neural hybridization is motivated by two hypotheses we treat as conjectures rather than established results. First, neural approximations are smooth differentiable functions whose outputs may absorb measurement noise more gracefully than literal arithmetic primitives. Second, small approximation errors inherent in neural function-fitting introduce slight variance between otherwise mathematically identical operators (e.g., the $\operatorname{add}(x,v)$ MLP and $\operatorname{identity}(x) + \operatorname{identity}(v)$), which in principle could relax the strict rank-deficiency that plagues redundant analytic libraries. As we report in Section~\ref{sec:results}, this variance is insufficient on its own to disambiguate truly redundant terms, which motivates the explicit complexity prior introduced in our routing experiments.
 
 \section{Methodology}
 
 The proposed architecture bridges the gap between the interpretability of standard SINDy and the flexibility of continuous neural networks through a multi-phase pipeline.
 
 \subsection{Phase 1: Grokking the MLPs}
-Instead of relying on rigid mathematical formulations, we train a universal set of neural modules. Small MLPs (e.g., 128 hidden units with Tanh or ReLU activations) are trained on synthetic random samples to learn specific target functions such as $identity(x)$, $\cos(x)$, $\sin(x)$, $add(x,y)$, and $mul(x,y)$. By employing AdamW optimization with heavy weight decay, we induce ``grokking'' \cite{b2}---a phenomenon where the network suddenly generalizes perfectly to unseen data long after memorizing the training set.
+Instead of relying on rigid mathematical formulations, we train a universal set of neural modules. Small MLPs (e.g., 128 hidden units with Tanh or ReLU activations) are trained on synthetic random samples to learn specific target functions such as $identity(x)$, $\cos(x)$, $\sin(x)$, $add(x,y)$, and $mul(x,y)$. Using AdamW optimization with heavy weight decay, we obtain training dynamics consistent with the grokking phenomenon \cite{b2}: validation loss drops sharply long after the training loss has plateaued (Fig.~\ref{fig:grokking}). We use the term descriptively, without claiming the underlying mechanism is identical to that of the original modular-arithmetic setting \cite{b2}.
 
 \begin{figure}[htbp]
   \centerline{\includegraphics[width=\linewidth]{./grokking_curves.png}}
@@ -103,6 +103,7 @@ For the baseline experiment, an 8-term library was constructed using the grokked
 STLSQ with a ridge penalty of $\alpha = 0.01$ and an optimal sparsity threshold of $0.2$ was utilized.
 
 \section{Preliminary Results and Discussion}
+\label{sec:results}
 
 \subsection{Baseline STLSQ Discovery (Experiment 1)}
 The initial discovery run successfully identified the mathematical equivalent of the true governing dynamics. The system produced the following sparse representations:
@@ -237,7 +238,7 @@ A consolidated comparison across all four routing variants appears in Table~\ref
   \end{tabular}
 \end{table*}
 
-\textbf{Ablation: complexity prior strength.} The conditional slot entropy fix (R4) was originally introduced together with the stronger complexity prior $\alpha=1.5$; the earlier base-entropy R3 had recovered the damping coefficient at approximately $-0.028$ rather than the true $-0.1$. With the conditional entropy formulation now applied to the shared top-$k$ router, R3 ($\alpha=1.0$) and R4 ($\alpha=1.5$) produce statistically indistinguishable equations: pairwise differences in every recovered coefficient sit at the fourth decimal, well within finite-sample noise. We therefore attribute the original R3 failure to the entropy formulation rather than to insufficient prior strength. Once each slot's conditional distribution is penalized correctly, $\alpha=1.0$ is sufficient to break the $\sin / \operatorname{identity}$ collinearity, and the $\alpha=1.5$ bump in R4 is cosmetic. This isolates the conditional slot entropy as the substantive methodological contribution of the routing pipeline.
+\textbf{Ablation: complexity prior strength.} The conditional slot entropy fix (R4) was introduced in early development together with the stronger complexity prior $\alpha=1.5$, after observations that an earlier base-entropy formulation of R3 was failing to commit slot~2 to the damping term. With the conditional entropy formulation now applied to the shared top-$k$ router, R3 ($\alpha=1.0$) and R4 ($\alpha=1.5$) produce statistically indistinguishable equations: pairwise differences in every recovered coefficient sit at the fourth decimal, well within finite-sample noise. We therefore attribute the original R3 failure to the entropy formulation rather than to insufficient prior strength. Once each slot's conditional distribution is penalized correctly, $\alpha=1.0$ is sufficient to break the $\sin / \operatorname{identity}$ collinearity, and the $\alpha=1.5$ bump in R4 is cosmetic. This isolates the conditional slot entropy as the substantive methodological contribution of the routing pipeline.
 
 \section{Conclusion and Future Work}
 This work demonstrates the viability of utilizing neural networks trained via grokking as basis functions for sparse system identification. The framework successfully captured the underlying dynamics of a noisy dynamical system with extreme accuracy under both the classical STLSQ regression and the differentiable Gumbel-Softmax routing paradigms. The routing experiments isolate a conditional slot entropy regularizer as the substantive methodological contribution: once each slot's conditional distribution is penalized correctly, the choice of complexity-prior strength becomes cosmetic at the precision afforded by the damped harmonic oscillator benchmark.
@@ -254,12 +255,6 @@ Future work will extend the framework to higher-dimensional dynamical systems wh
 
   \bibitem{b3}
   M.~Cranmer, ``Interpretable Machine Learning for Science with PySR and SymbolicRegression.jl,'' \textit{arXiv preprint arXiv:2305.01582}, 2023.
-
-  \bibitem{b4}
-  B.~M.~de~Silva, K.~Champion, M.~Quade, J.~C.~Loiseau, J.~N.~Kutz, and S.~L.~Brunton, ``PySINDy: A Python Package for the Sparse Identification of Nonlinear Dynamical Systems from Data,'' \textit{Journal of Open Source Software}, vol.~5, no.~49, p.~2104, 2020.
-
-  \bibitem{b5}
-  N.~Nanda, T.~Lieberum, K.~Singhal, M.~Balcells, J.~Dickstein, C.~Tsvetkov, P.~Atanasova, M.~Soula, S.~Mandyl, G.~Irving, V.~Nanda, A.~Scherlis, L.~Chan, Y.~Bengio, R.~Sharma, J.~Steinhardt, S.~Bowman, and E.~Hubinger, ``Progress Measures for Grokking via Mechanistic Interpretability,'' in \textit{International Conference on Learning Representations (ICLR)}, 2023.
 
   \bibitem{b6}
   Z.~Liu, Y.~Wang, S.~Vaidya, F.~Ruehle, J.~Halverson, M.~Soljacic, T.~Y.~Hou, and M.~Tegmark, ``KAN: Kolmogorov-Arnold Networks,'' \textit{arXiv preprint arXiv:2404.19756}, 2024.
