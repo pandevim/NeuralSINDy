@@ -72,19 +72,29 @@ def train_router(router, X_train, dXdt_train, X_val, dXdt_val, cfg, device="cpu"
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.epochs)
     criterion = nn.MSELoss()
 
-    history = {"epoch": [], "train_loss": [], "val_loss": [], "temperature": []}
+    history = {
+        "epoch": [], "train_loss": [], "val_loss": [], "temperature": [],
+        # Decomposition of the total train loss. train_loss = train_mse + train_entropy.
+        # The complexity prior is baked into router logits (not a separate loss term),
+        # so there is no train_prior column.
+        "train_mse": [], "train_entropy": [],
+    }
 
     for epoch in range(1, cfg.epochs + 1):
         tau = _anneal_tau(epoch, cfg)
 
         router.train()
         pred, _ = router(X_tr, temperature=tau, hard=True)
-        loss = criterion(pred, dX_tr)
+        mse = criterion(pred, dX_tr)
+        loss = mse
 
         # Commitment entropy penalty (disabled when entropy_weight_max=0).
         entropy_weight = cfg.entropy_weight_max * max(0.0, 1.0 - tau / cfg.tau_start)
+        entropy_term_value = 0.0
         if entropy_weight > 0:
-            loss = loss + entropy_weight * router.logit_entropy()
+            entropy_term = entropy_weight * router.logit_entropy()
+            loss = loss + entropy_term
+            entropy_term_value = entropy_term.item()
 
         optimizer.zero_grad()
         loss.backward()
@@ -102,12 +112,15 @@ def train_router(router, X_train, dXdt_train, X_val, dXdt_val, cfg, device="cpu"
 
             history["epoch"].append(epoch)
             history["train_loss"].append(loss.item())
+            history["train_mse"].append(mse.item())
+            history["train_entropy"].append(entropy_term_value)
             history["val_loss"].append(val_loss.item())
             history["temperature"].append(tau)
 
             print(
                 f"  Epoch {epoch:>5d} | τ={tau:.3f} | "
-                f"Train: {loss.item():.6f} | Val: {val_loss.item():.6f}"
+                f"MSE: {mse.item():.6f} | Reg: {entropy_term_value:.6f} | "
+                f"Val: {val_loss.item():.6f}"
             )
 
     return history

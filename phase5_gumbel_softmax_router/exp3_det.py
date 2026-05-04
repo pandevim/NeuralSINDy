@@ -82,7 +82,7 @@ def run(load_grokked_mlp, hf_repo_id, device="cpu",
     router = router.cpu()
     X_t = torch.from_numpy(X.astype(np.float32))
     summary = router.get_routing_summary(X_t, temperature=0.01, noise=False)
-    scorecard = compute_scorecard(router, history, X_val, dXdt_val, truth, exp_id="exp3_det")
+    scorecard = compute_scorecard(router, history, X_val, dXdt_val, truth, exp_id="exp3_det", noise=False)
 
     print_summary(router, history, summary, truth)
     plot_run(router, history, summary, exp_id="Exp 3 (det val)")

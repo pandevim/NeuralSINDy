@@ -8,7 +8,9 @@ Scorecard keys
 --------------
     exp_id              str   — experiment label, e.g. "exp1"
     n_params            int   — trainable parameter count
-    val_mse             float — MSE on validation set at τ=0.01
+    val_mse             float — MSE on validation set at τ=0.01 (single eval)
+    val_mse_median      float — median of history["val_loss"] over the last
+                                ``median_last_n`` log points (None if history empty)
     commitment          float — fraction of samples with max gate ≥ 90%
     equations           dict  — {deriv: equation_string}
     correctness         bool  — True if dominant terms match the true ODE
@@ -20,17 +22,24 @@ import torch
 import torch.nn.functional as F
 
 
-def compute_scorecard(router, history, X_val, dXdt_val, truth, exp_id=""):
+def compute_scorecard(
+    router, history, X_val, dXdt_val, truth,
+    exp_id="", noise=True, median_last_n=10,
+):
     """
     Compute the standard scorecard for one router run.
 
     Args:
-        router:    trained RouterBase subclass, on CPU
-        history:   dict returned by train_router
-        X_val:     numpy (N, state_dim) — validation set
-        dXdt_val:  numpy (N, state_dim)
-        truth:     dict with "k" and "c" (true oscillator params)
-        exp_id:    label string for the scorecard row
+        router:        trained RouterBase subclass, on CPU
+        history:       dict returned by train_router
+        X_val:         numpy (N, state_dim) — validation set
+        dXdt_val:      numpy (N, state_dim)
+        truth:         dict with "k" and "c" (true oscillator params)
+        exp_id:        label string for the scorecard row
+        noise:         if False, evaluate val_mse, commitment and routing summary
+                       under deterministic argmax routing (no Gumbel sampling).
+                       Default True reproduces the historical stochastic behavior.
+        median_last_n: window size (in log points, not epochs) for val_mse_median.
 
     Returns:
         dict with scorecard fields
@@ -40,19 +49,25 @@ def compute_scorecard(router, history, X_val, dXdt_val, truth, exp_id=""):
     dX_t = torch.from_numpy(dXdt_val.astype(np.float32))
 
     with torch.no_grad():
-        pred, _ = router(X_t, temperature=0.01, hard=True)
+        pred, _ = router(X_t, temperature=0.01, hard=True, noise=noise)
         val_mse = F.mse_loss(pred, dX_t).item()
 
-    summary = router.get_routing_summary(X_t, temperature=0.01)
+    summary = router.get_routing_summary(X_t, temperature=0.01, noise=noise)
+
+    val_loss_log = history.get("val_loss") or []
+    val_mse_median = (
+        float(np.median(val_loss_log[-median_last_n:])) if val_loss_log else None
+    )
 
     return {
-        "exp_id":      exp_id,
-        "n_params":    sum(p.numel() for p in router.parameters() if p.requires_grad),
-        "val_mse":     val_mse,
-        "commitment":  _commitment_score(router, X_t),
-        "equations":   {deriv: equation_string(terms) for deriv, terms in summary.items()},
-        "correctness": _check_correctness(summary, truth),
-        "final_tau":   history["temperature"][-1] if history["temperature"] else None,
+        "exp_id":         exp_id,
+        "n_params":       sum(p.numel() for p in router.parameters() if p.requires_grad),
+        "val_mse":        val_mse,
+        "val_mse_median": val_mse_median,
+        "commitment":     _commitment_score(router, X_t, noise=noise),
+        "equations":      {deriv: equation_string(terms) for deriv, terms in summary.items()},
+        "correctness":    _check_correctness(summary, truth),
+        "final_tau":      history["temperature"][-1] if history["temperature"] else None,
     }
 
 
@@ -70,13 +85,13 @@ def equation_string(terms, threshold=0.01):
 
 # ── Internal helpers ─────────────────────────────────────────────────────────
 
-def _commitment_score(router, X_t):
+def _commitment_score(router, X_t, noise=True):
     """
     Fraction of samples where the dominant gate has ≥ 90% activation.
     A committed router has score ≈ 1.0; a spread router has score ≈ 0.
     """
     with torch.no_grad():
-        _, gates = router(X_t, temperature=0.01, hard=True)
+        _, gates = router(X_t, temperature=0.01, hard=True, noise=noise)
 
     # Normalise gate shape across router variants.
     # StateDepRouter / StateIndepRouter: (state_dim, batch, n_mlps)
