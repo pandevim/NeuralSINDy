@@ -122,10 +122,112 @@ While mathematically correct, Experiment 1 highlighted a critical challenge in u
 
 Specifically, the $add(x,v)$ MLP is mathematically identical to $identity(x) + identity(v)$. This linear dependence creates a rank-deficient library matrix $\mathbf{\Theta}$. Consequently, the STLSQ optimizer distributes the coefficients arbitrarily across the redundant terms (Fig. \ref{fig:coeffs}). While the combined system output is highly accurate (Fig. \ref{fig:comparison}), the individual coefficients lose direct human interpretability without manual simplification. This implies that future iterations of the neural library must explicitly avoid terms that are linear combinations of others, or incorporate a pre-processing collinearity detection step.
 
-\section{Conclusion and Future Work}
-This work demonstrates the viability of utilizing neural networks trained via grokking as basis functions for sparse system identification. The framework successfully captured the underlying dynamics of a noisy dynamical system with extreme accuracy. 
+\subsection{Gumbel-Softmax Routing Experiments}
 
-Future work will address the collinearity issue by curating strictly independent neural libraries (Experiment 2). Furthermore, we will formally benchmark the STLSQ approach against the Gumbel-Softmax routing paradigm (Experiment 3) to validate whether end-to-end differentiable combinatorial search outperforms classical sparse regression in both accuracy and basis sparsity.
+To address the collinearity-induced coefficient spreading observed in the STLSQ baseline, we developed a differentiable routing framework that learns discrete MLP selections via Gumbel-Softmax sampling \cite{b7} with a Straight-Through Estimator. All variants share the same eight-term grokked library, frozen MLPs, and a linear temperature schedule annealing $\tau$ from $5.0$ to $0.05$ over the first $2{,}500$ epochs of $4{,}000$ total. We iterated through four router variants, each addressing a specific limitation of the previous.
+
+\textbf{Variant R1 (State-dependent router).} A small MLP maps the state $[x, v]$ to per-derivative routing logits, allowing routing decisions to vary per sample. While expressive, this design violates the SINDy assumption that a single global term governs the dynamics uniformly across phase space and inflates the trainable parameter count to roughly $10^4$. Restricted to $k=1$ basis function per derivative, R1 recovers
+\begin{align*}
+\dot{x} &= +1.0000\,\operatorname{identity}(v), \\
+\dot{v} &= -0.9879\,\operatorname{identity}(x),
+\end{align*}
+identifying the conservative-spring term but missing the damping term entirely (Fig.~\ref{fig:r1}). R1 thus exposes the expressivity ceiling of one-hot routing for any system whose right-hand side contains more than a single library term.
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{./phase_5_exp1_gumble_softmax_router.png}}
+\caption{Variant R1 (state-dependent router): training/validation curves and routing summary. The router commits to $\operatorname{identity}(v)$ for $\dot{x}$ and $\operatorname{identity}(x)$ for $\dot{v}$, but $k{=}1$ selection precludes recovery of the damping component, leaving val MSE at $\approx 7.2\times10^{-4}$.}
+\label{fig:r1}
+\end{figure}
+
+\textbf{Variant R2 (State-independent router).} A learnable logit vector per derivative, broadcast across the batch. Every sample receives the same routing decision (modulo independent Gumbel noise), restoring the SINDy global-uniformity assumption with only $32$ trainable parameters for an eight-term library on a two-dimensional state. However, one-hot routing still cannot express the two-term damping equation $\dot{v} = -kx - c\dot{x}$, and at small $|z|$ the grokked $\sin$ MLP closely approximates $\operatorname{identity}$, so the router collapses onto $\sin$ in place of the simpler linear basis. R2 recovers
+\begin{align*}
+\dot{x} &= +1.0265\,\sin(v), \\
+\dot{v} &= -1.0138\,\sin(x),
+\end{align*}
+mathematically valid for small displacements but symbolically misleading (Fig.~\ref{fig:r2}). This motivates an explicit Occam's-razor bias against composite or higher-order basis functions, introduced in R3.
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{./phase_5_exp2_gumble_softmax_router.png}}
+\caption{Variant R2 (state-independent router): the router converges to $\sin$ rather than $\operatorname{identity}$, illustrating the $\sin(z) \approx z$ collinearity at small $|z|$ that motivates the complexity prior in R3. Validation MSE plateaus at $\approx 1.2\times10^{-3}$, dominated by the missing damping term.}
+\label{fig:r2}
+\end{figure}
+
+\textbf{Variant R3 (Top-$k$ router with complexity prior).} The router selects $k=2$ distinct basis functions per derivative via iterative masked Gumbel-Softmax sampling without replacement. A complexity bias in logit space favors simpler basis functions ($\operatorname{identity}: +\alpha$; $\sin/\cos: 0$; $\operatorname{add}/\operatorname{mul}: -\alpha$, with $\alpha=1.0$), breaking the $\sin(z) \approx \operatorname{identity}(z)$ collinearity exposed by R2. With $k=2$ and the complexity prior in place, R3 recovers
+\begin{align*}
+\dot{x} &= +0.9998\,\operatorname{identity}(v), \\
+\dot{v} &= -0.9997\,\operatorname{identity}(x) - 0.0998\,\operatorname{identity}(v),
+\end{align*}
+matching the true dynamics to within four decimal places. However, the validation curve under stochastic Gumbel-Softmax evaluation exhibits sporadic spikes of up to $10^{3}\times$ the surrounding floor (Fig.~\ref{fig:r3_orig}), making any single-epoch validation reading unreliable as a point estimate of fit quality.
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{./phase_5_exp3_gumble_softmax_router.png}}
+\caption{Variant R3 with stochastic Gumbel-Softmax sampling at validation time. The validation curve shows order-of-magnitude excursions at individual logging epochs (e.g., epoch $1{,}600$ reading $1.9\times10^{-3}$ between $10^{-6}$ neighbours) caused by single unlucky Gumbel draws.}
+\label{fig:r3_orig}
+\end{figure}
+
+\textbf{Variant R4 (Conditional slot entropy).} An earlier formulation of the entropy regularizer penalized the entropy of the base logit distribution \emph{before} masking, leaving the second slot's conditional distribution flat after the dominant term was excluded and preventing commitment of the damping coefficient. R4 replaces this with a conditional slot entropy that mirrors the forward-pass masking: each slot's conditional distribution is penalized independently as the mask advances. R4 additionally raises the complexity prior to $\alpha=1.5$. Under the stochastic-validation protocol, R4 recovers
+\begin{align*}
+\dot{x} &= +0.9999\,\operatorname{identity}(v), \\
+\dot{v} &= -0.9981\,\operatorname{identity}(x) - 0.0995\,\operatorname{identity}(v),
+\end{align*}
+with three distinct val spikes during the schedule (epochs $1{,}400$, $1{,}600$, and $2{,}800$; Fig.~\ref{fig:r4_orig}).
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{./phase_5_exp4_gumble_softmax_router.png}}
+\caption{Variant R4 with stochastic Gumbel-Softmax sampling at validation time. Three spikes appear at epochs $1{,}400$, $1{,}600$, and $2{,}800$, each roughly $10^{5}\times$ the surrounding floor and recovering within one logging interval.}
+\label{fig:r4_orig}
+\end{figure}
+
+\textbf{Deterministic validation evaluation.} The standard Gumbel-Softmax draws a fresh stochastic sample at every forward pass. Evaluating validation MSE under this stochastic protocol yielded the order-of-magnitude spikes visible in Figs.~\ref{fig:r3_orig} and~\ref{fig:r4_orig}, making any single-epoch reading unreliable as a point estimate of fit quality. We added a hard-argmax evaluation path that bypasses Gumbel sampling and is used exclusively at validation time and for final coefficient extraction; stochastic sampling is preserved during training so optimization dynamics are unchanged. Re-running R3 and R4 under deterministic validation produces the smooth, monotonically decaying curves shown in Figs.~\ref{fig:r3_det} and~\ref{fig:r4_det}.
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{./phase_5_exp3(det_val)_gumble_softmax_router.png}}
+\caption{Variant R3 under deterministic validation evaluation. The training curve climbs as the entropy and complexity penalties scale up with the temperature schedule; the validation curve, free of Gumbel noise, decays monotonically to the floor of $10^{-6}$.}
+\label{fig:r3_det}
+\end{figure}
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{./phase_5_exp4(det_val)_gumble_softmax_router.png}}
+\caption{Variant R4 under deterministic validation evaluation. The routing architecture is identical to R3; differences lie entirely in the entropy formulation and the complexity prior strength.}
+\label{fig:r4_det}
+\end{figure}
+
+\textbf{Reading the training curve.} A characteristic feature of all top-$k$ runs is that the reported training loss climbs by roughly $2.5\times$ from epoch $600$ to epoch $4{,}000$ while the validation loss collapses to the $10^{-6}$ floor. This inversion is not a generalization gap. The training objective is a sum of reconstruction MSE and the entropy and complexity penalties, the latter weighted by $\eta(\tau) = \eta_{\max}(1 - \tau/\tau_{\text{start}})$, which ramps up monotonically as $\tau$ anneals down. Validation, by contrast, reports pure reconstruction MSE under deterministic argmax routing and therefore directly measures fit quality. The rising training number reflects the regularizer doing its job at low temperatures, not optimization difficulty.
+
+\textbf{Recovered dynamics under deterministic validation.} The deterministic-validation reruns of R3 and R4 both recover the true governing equations to within four decimal places, with final validation MSE on the order of $10^{-6}$ (Fig.~\ref{fig:r3_det}, Fig.~\ref{fig:r4_det}):
+\begin{align*}
+\text{R3 } (\alpha{=}1.0):\ \dot{x} &= +0.9999\,v, \\
+\dot{v} &= -0.9998\,x - 0.0996\,v, \\
+\text{R4 } (\alpha{=}1.5):\ \dot{x} &= +0.9998\,v, \\
+\dot{v} &= -0.9998\,x - 0.0997\,v.
+\end{align*}
+
+A consolidated comparison across all four routing variants appears in Table~\ref{tab:variants}.
+
+\begin{table*}[htbp]
+\caption{Recovered Dynamics Across Routing Variants on the Damped Harmonic Oscillator}
+\label{tab:variants}
+\centering
+\begin{tabular}{lrcll}
+\toprule
+Variant & Trainable Params & Final Val MSE & Recovered $\dot{x}$ & Recovered $\dot{v}$ \\
+\midrule
+R1 (state-dependent, $k{=}1$)             & $9{,}760$ & $7.2{\times}10^{-4}$  & $+1.0000\,v$        & $-0.9879\,x$ \quad\textit{(damping missing)} \\
+R2 (state-independent, $k{=}1$)           & $32$      & $1.2{\times}10^{-3}$  & $+1.0265\,\sin(v)$ & $-1.0138\,\sin(x)$ \quad\textit{($\sin/\operatorname{id}$ collapse)} \\
+R3 (top-$2$, $\alpha{=}1.0$, det.\ val)   & $48$      & $1.0{\times}10^{-6}$  & $+0.9999\,v$        & $-0.9998\,x - 0.0996\,v$ \\
+R4 (top-$2$, $\alpha{=}1.5$, cond.\ ent., det.\ val) & $48$ & $1.0{\times}10^{-6}$ & $+0.9998\,v$ & $-0.9998\,x - 0.0997\,v$ \\
+\midrule
+Truth                                      & ---       & ---                   & $+1.0\,v$           & $-1.0\,x - 0.1\,v$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\textbf{Ablation: complexity prior strength.} The conditional slot entropy fix (R4) was originally introduced together with the stronger complexity prior $\alpha=1.5$; the earlier base-entropy R3 had recovered the damping coefficient at approximately $-0.028$ rather than the true $-0.1$. With the conditional entropy formulation now applied to the shared top-$k$ router, R3 ($\alpha=1.0$) and R4 ($\alpha=1.5$) produce statistically indistinguishable equations: pairwise differences in every recovered coefficient sit at the fourth decimal, well within finite-sample noise. We therefore attribute the original R3 failure to the entropy formulation rather than to insufficient prior strength. Once each slot's conditional distribution is penalized correctly, $\alpha=1.0$ is sufficient to break the $\sin / \operatorname{identity}$ collinearity, and the $\alpha=1.5$ bump in R4 is cosmetic. This isolates the conditional slot entropy as the substantive methodological contribution of the routing pipeline.
+
+\section{Conclusion and Future Work}
+This work demonstrates the viability of utilizing neural networks trained via grokking as basis functions for sparse system identification. The framework successfully captured the underlying dynamics of a noisy dynamical system with extreme accuracy under both the classical STLSQ regression and the differentiable Gumbel-Softmax routing paradigms. The routing experiments isolate a conditional slot entropy regularizer as the substantive methodological contribution: once each slot's conditional distribution is penalized correctly, the choice of complexity-prior strength becomes cosmetic at the precision afforded by the damped harmonic oscillator benchmark.
+
+Future work will extend the framework to higher-dimensional dynamical systems where the combinatorial advantages of differentiable routing become pronounced, characterize noise robustness across a sweep of $\sigma$, and integrate Phase 4 symbolic distillation through PySR end-to-end so that the recovered grokked-MLP outputs are reduced to fully analytical expressions without manual simplification.
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}

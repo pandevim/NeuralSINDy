@@ -24,7 +24,28 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}The Collinearity Challenge}{2}{}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Bar chart displaying the discovered sparse coefficients. The chart highlights the distribution of weights across collinear terms (e.g., $identity$ and $add$), illustrating the rank-deficiency challenge.}}{2}{}\protected@file@percent }
 \newlabel{fig:coeffs}{{4}{2}{}{figure.4}{}}
+\citation{b7}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Gumbel-Softmax Routing Experiments}{3}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Variant R1 (state-dependent router): training/validation curves and routing summary. The router commits to $\operatorname  {identity}(v)$ for $\dot  {x}$ and $\operatorname  {identity}(x)$ for $\dot  {v}$, but $k{=}1$ selection precludes recovery of the damping component, leaving val MSE at $\approx 7.2\times 10^{-4}$.}}{3}{}\protected@file@percent }
+\newlabel{fig:r1}{{5}{3}{}{figure.5}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Variant R2 (state-independent router): the router converges to $\sin $ rather than $\operatorname  {identity}$, illustrating the $\sin (z) \approx z$ collinearity at small $|z|$ that motivates the complexity prior in R3. Validation MSE plateaus at $\approx 1.2\times 10^{-3}$, dominated by the missing damping term.}}{3}{}\protected@file@percent }
+\newlabel{fig:r2}{{6}{3}{}{figure.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Variant R3 with stochastic Gumbel-Softmax sampling at validation time. The validation curve shows order-of-magnitude excursions at individual logging epochs (e.g., epoch $1{,}600$ reading $1.9\times 10^{-3}$ between $10^{-6}$ neighbours) caused by single unlucky Gumbel draws.}}{3}{}\protected@file@percent }
+\newlabel{fig:r3_orig}{{7}{3}{}{figure.7}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Variant R4 with stochastic Gumbel-Softmax sampling at validation time. Three spikes appear at epochs $1{,}400$, $1{,}600$, and $2{,}800$, each roughly $10^{5}\times $ the surrounding floor and recovering within one logging interval.}}{4}{}\protected@file@percent }
+\newlabel{fig:r4_orig}{{8}{4}{}{figure.8}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Variant R3 under deterministic validation evaluation. The training curve climbs as the entropy and complexity penalties scale up with the temperature schedule; the validation curve, free of Gumbel noise, decays monotonically to the floor of $10^{-6}$.}}{4}{}\protected@file@percent }
+\newlabel{fig:r3_det}{{9}{4}{}{figure.9}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Variant R4 under deterministic validation evaluation. The routing architecture is identical to R3; differences lie entirely in the entropy formulation and the complexity prior strength.}}{4}{}\protected@file@percent }
+\newlabel{fig:r4_det}{{10}{4}{}{figure.10}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Conclusion and Future Work}{4}{}\protected@file@percent }
 \bibstyle{IEEEtran}
 \bibdata{references}
-\@writefile{toc}{\contentsline {section}{\numberline {V}Conclusion and Future Work}{3}{}\protected@file@percent }
-\gdef \@abspage@last{3}
+\bibcite{b1}{1}
+\bibcite{b7}{2}
+\bibcite{b3}{3}
+\bibcite{b2}{4}
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Recovered Dynamics Across Routing Variants on the Damped Harmonic Oscillator}}{5}{}\protected@file@percent }
+\newlabel{tab:variants}{{I}{5}{}{table.1}{}}
+\@writefile{toc}{\contentsline {section}{References}{5}{}\protected@file@percent }
+\gdef \@abspage@last{5}
