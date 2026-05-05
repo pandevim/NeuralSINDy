@@ -46,7 +46,3 @@ A true native, single-shot continuous relaxation of a $k$-hot categorical distri
 - **Independent Bernoullis:** Treating each logit as an independent Bernoulli coin flip (using something like the Concrete distribution) and applying a soft penalty to force the sum of the activations to equal exactly $k$.
 
 Your method—iterative masked Gumbel-Softmax with the Straight-Through Estimator—is actually one of the most clever, practical, and mathematically stable ways to approximate a $k$-hot categorical choice in PyTorch. It avoids the heavy computational overhead of Sinkhorn iterations while still guaranteeing exactly $k$ distinct selections.
-
-Decompose train loss in the logger — add train_mse, train_entropy, train_prior so the reported train curve isn't dominated by the entropy/complexity penalties that grow as τ shrinks. Right now train ending ~70,000× worse than val is purely a logging artifact.
-
-Report final val MSE as a median over the last ~500 epochs instead of the last-epoch snapshot, so a single bad Gumbel draw can't swing the headline number.

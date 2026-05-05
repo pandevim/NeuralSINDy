@@ -40,7 +40,7 @@
 \@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Bar chart displaying the discovered sparse coefficients. The chart highlights the distribution of weights across collinear terms (e.g., $identity$ and $add$), illustrating the rank-deficiency challenge.}}{3}{}\protected@file@percent }
 \newlabel{fig:coeffs}{{4}{3}{}{figure.4}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Gumbel-Softmax Routing Experiments}{3}{}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Variant R1 (state-dependent router): training/validation curves and routing summary. The router commits to $\operatorname  {identity}(v)$ for $\dot  {x}$ and $\operatorname  {identity}(x)$ for $\dot  {v}$, but $k{=}1$ selection precludes recovery of the damping component, leaving val MSE at $\approx 7.2\times 10^{-4}$.}}{4}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Variant R1 (state-dependent router): training/validation curves and routing summary. The router commits to $\operatorname  {identity}(v)$ for $\dot  {x}$ and $\sin (x)$ for $\dot  {v}$; $k{=}1$ selection precludes recovery of the damping component, leaving val MSE at $\approx 9.8\times 10^{-4}$.}}{4}{}\protected@file@percent }
 \newlabel{fig:r1}{{5}{4}{}{figure.5}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Variant R2 (state-independent router): the router converges to $\sin $ rather than $\operatorname  {identity}$, illustrating the $\sin (z) \approx z$ collinearity at small $|z|$ that motivates the complexity prior in R3. Validation MSE plateaus at $\approx 1.2\times 10^{-3}$, dominated by the missing damping term.}}{4}{}\protected@file@percent }
 \newlabel{fig:r2}{{6}{4}{}{figure.6}{}}
@@ -62,6 +62,6 @@
 \newlabel{fig:r4_det}{{10}{5}{}{figure.10}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {VI}Conclusion and Future Work}{5}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{References}{5}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Recovered Dynamics Across Routing Variants on the Damped Harmonic Oscillator}}{6}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Recovered Dynamics Across Routing Variants on the Damped Harmonic Oscillator. Validation MSE is reported as the median over the last ten logging epochs for the stochastic R1 / R2 variants, and as the deterministic single-pass value for R3 / R4 (see ``Reporting protocol'').}}{6}{}\protected@file@percent }
 \newlabel{tab:variants}{{I}{6}{}{table.1}{}}
 \gdef \@abspage@last{6}

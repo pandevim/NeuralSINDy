@@ -145,13 +145,13 @@ To address the collinearity-induced coefficient spreading observed in the STLSQ 
 \textbf{Variant R1 (State-dependent router).} A small MLP maps the state $[x, v]$ to per-derivative routing logits, allowing routing decisions to vary per sample. While expressive, this design violates the SINDy assumption that a single global term governs the dynamics uniformly across phase space and inflates the trainable parameter count to roughly $10^4$. Restricted to $k=1$ basis function per derivative, R1 recovers
 \begin{align*}
   \dot{x} & = +1.0000\,\operatorname{identity}(v), \\
-  \dot{v} & = -0.9879\,\operatorname{identity}(x),
+  \dot{v} & = -1.0138\,\sin(x),
 \end{align*}
-identifying the conservative-spring term but missing the damping term entirely (Fig.~\ref{fig:r1}). R1 thus exposes the expressivity ceiling of one-hot routing for any system whose right-hand side contains more than a single library term.
+capturing the kinematic relation through $\operatorname{identity}(v)$ but expressing the conservative-spring term through $\sin(x) \approx x$ rather than the linear basis, and missing the damping term entirely (Fig.~\ref{fig:r1}). The choice of $\sin$ versus $\operatorname{identity}$ for the spring term is sensitive to initialization, since both are nearly equivalent at small $|x|$; this foreshadows the full $\sin / \operatorname{identity}$ collapse observed in R2. Independent of the basis selection, R1 exposes the expressivity ceiling of one-hot routing for any system whose right-hand side contains more than a single library term.
 
 \begin{figure}[htbp]
   \centerline{\includegraphics[width=\linewidth]{./phase_5_exp1_gumble_softmax_router.png}}
-  \caption{Variant R1 (state-dependent router): training/validation curves and routing summary. The router commits to $\operatorname{identity}(v)$ for $\dot{x}$ and $\operatorname{identity}(x)$ for $\dot{v}$, but $k{=}1$ selection precludes recovery of the damping component, leaving val MSE at $\approx 7.2\times10^{-4}$.}
+  \caption{Variant R1 (state-dependent router): training/validation curves and routing summary. The router commits to $\operatorname{identity}(v)$ for $\dot{x}$ and $\sin(x)$ for $\dot{v}$; $k{=}1$ selection precludes recovery of the damping component, leaving val MSE at $\approx 9.8\times10^{-4}$.}
   \label{fig:r1}
 \end{figure}
 
@@ -196,6 +196,8 @@ with three distinct val spikes during the schedule (epochs $1{,}400$, $1{,}600$,
 
 \textbf{Deterministic validation evaluation.} The standard Gumbel-Softmax draws a fresh stochastic sample at every forward pass. Evaluating validation MSE under this stochastic protocol yielded the order-of-magnitude spikes visible in Figs.~\ref{fig:r3_orig} and~\ref{fig:r4_orig}, making any single-epoch reading unreliable as a point estimate of fit quality. We added a hard-argmax evaluation path that bypasses Gumbel sampling and is used exclusively at validation time and for final coefficient extraction; stochastic sampling is preserved during training so optimization dynamics are unchanged. Re-running R3 and R4 under deterministic validation produces the smooth, monotonically decaying curves shown in Figs.~\ref{fig:r3_det} and~\ref{fig:r4_det}.
 
+\textbf{Reporting protocol.} For the stochastic R1 and R2 variants we report the median validation MSE over the last ten logging epochs of the schedule, rather than a single final-epoch reading. For R3 and R4 we report the deterministic single-pass validation MSE, which is reproducible by construction. Both protocols agree to within sampling noise once a router has committed; we observed snapshot-vs-median ratios as large as $\sim 100\times$ for stochastic R3 in individual reruns when the final-epoch Gumbel draw happened to land on a spike (Fig.~\ref{fig:r3_orig}), while the deterministic-eval and median values for the same run sat at $10^{-6}$.
+
 \begin{figure}[htbp]
   \centerline{\includegraphics[width=\linewidth]{./phase_5_exp3(det_val)_gumble_softmax_router.png}}
   \caption{Variant R3 under deterministic validation evaluation. The training curve climbs as the entropy and complexity penalties scale up with the temperature schedule; the validation curve, free of Gumbel noise, decays monotonically to the floor of $10^{-6}$.}
@@ -221,14 +223,14 @@ with three distinct val spikes during the schedule (epochs $1{,}400$, $1{,}600$,
 A consolidated comparison across all four routing variants appears in Table~\ref{tab:variants}.
 
 \begin{table*}[htbp]
-  \caption{Recovered Dynamics Across Routing Variants on the Damped Harmonic Oscillator}
+  \caption{Recovered Dynamics Across Routing Variants on the Damped Harmonic Oscillator. Validation MSE is reported as the median over the last ten logging epochs for the stochastic R1 / R2 variants, and as the deterministic single-pass value for R3 / R4 (see ``Reporting protocol'').}
   \label{tab:variants}
   \centering
   \begin{tabular}{lrcll}
     \toprule
-    Variant                                              & Trainable Params & Final Val MSE        & Recovered $\dot{x}$ & Recovered $\dot{v}$                                                  \\
+    Variant                                              & Trainable Params & Val MSE              & Recovered $\dot{x}$ & Recovered $\dot{v}$                                                  \\
     \midrule
-    R1 (state-dependent, $k{=}1$)                        & $9{,}760$        & $7.2{\times}10^{-4}$ & $+1.0000\,v$        & $-0.9879\,x$ \quad\textit{(damping missing)}                         \\
+    R1 (state-dependent, $k{=}1$)                        & $9{,}760$        & $9.8{\times}10^{-4}$ & $+1.0000\,v$        & $-1.0138\,\sin(x)$ \quad\textit{(damping missing)}                   \\
     R2 (state-independent, $k{=}1$)                      & $32$             & $1.2{\times}10^{-3}$ & $+1.0265\,\sin(v)$  & $-1.0138\,\sin(x)$ \quad\textit{($\sin/\operatorname{id}$ collapse)} \\
     R3 (top-$2$, $\alpha{=}1.0$, det.\ val)              & $48$             & $1.0{\times}10^{-6}$ & $+0.9999\,v$        & $-0.9998\,x - 0.0996\,v$                                             \\
     R4 (top-$2$, $\alpha{=}1.5$, cond.\ ent., det.\ val) & $48$             & $1.0{\times}10^{-6}$ & $+0.9998\,v$        & $-0.9998\,x - 0.0997\,v$                                             \\
