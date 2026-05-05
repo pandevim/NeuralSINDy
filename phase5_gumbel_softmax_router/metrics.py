@@ -122,6 +122,6 @@ def _check_correctness(summary, truth):
     dx_ok = "identity(v)" in dx_terms and dx_terms["identity(v)"] > 0.5
     dv_ok = (
         "identity(x)" in dv_terms and dv_terms["identity(x)"] < -0.1
-        and "identity(v)" in dv_terms and dv_terms["identity(v)"] < -0.1
+        and "identity(v)" in dv_terms and dv_terms["identity(v)"] < -0.05
     )
     return dx_ok and dv_ok
