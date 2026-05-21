@@ -63,3 +63,21 @@ Thumbs.db
 
 # Logs
 *.log
+
+# LaTeX intermediate files
+*.aux
+*.bbl
+*.blg
+*.bcf
+*.out
+*.toc
+*.lof
+*.lot
+*.log
+*.fls
+*.fdb_latexmk
+*.vrb
+*.snm
+*.nav
+*.synctex.gz
+*.run.xml
